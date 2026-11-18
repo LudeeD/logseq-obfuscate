@@ -1,0 +1,22 @@
+{
+  "name": "logseq-obfuscate",
+  "version": "0.1.0",
+  "description": "Hide the content of marked pages until you unlock them",
+  "main": "dist/index.html",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build"
+  },
+  "logseq": {
+    "id": "logseq-obfuscate",
+    "title": "Obfuscate"
+  },
+  "repository": "https://github.com/LudeeD/logseq-obfuscate",
+  "license": "MIT",
+  "devDependencies": {
+    "@logseq/libs": "^0.3.4",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8"
+  }
+}
