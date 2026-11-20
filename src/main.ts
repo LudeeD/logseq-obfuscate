@@ -5,15 +5,21 @@ const TAG = "obfuscate";
 const STYLE_KEY = "obfuscate-style";
 const TOOLBAR_KEY = "obfuscate-toggle";
 const BLUR = "blur(12px)";
+// Shown as the window title instead of a tagged page's name.
+const NEUTRAL_TITLE = "Logseq";
 // Set on elements that only show a page name (Recent, Favorites, sidebar).
 const MARK = "data-obfuscate";
 
-// Logseq renders every page with `data-page-tags='["Page", "obfuscate"]'`,
-// in the main view and in the sidebar alike.
+// --- Logseq markup this plugin relies on (checked against Logseq 2.0.2) ---
+// Every page renders with `data-page-tags='["Page", "obfuscate"]'`, in the
+// main view and in the sidebar alike.
 const TAGGED_PAGE = `.page[data-page-tags*='"${TAG}"']`;
 const MAIN = "#main-content-container";
 // Excludes anything inside the main view, used once the user unlocks it.
 const OUTSIDE_MAIN = `:not(${MAIN} *)`;
+// Places that show a page name with no uuid: Recent, Favorites and right
+// sidebar headers. These are matched by title instead.
+const NAME_ONLY = "li .page-title, .sidebar-item-header .page-title";
 
 // The plugin runs in an iframe on the same origin as Logseq's window.
 const hostDocument = parent.document;
@@ -30,26 +36,34 @@ let hiddenPages: string[] = [];
 // Lowercased titles of tagged pages, for lists that carry no uuid.
 let hiddenTitles = new Set<string>();
 
+// Where each kind of hidden thing shows up, one selector per place.
 function selectors(scope: string) {
+  const forBlocks = (make: (uuid: string) => string) =>
+    hiddenBlocks.map((uuid) => make(uuid) + scope);
+  const forPages = (make: (uuid: string) => string) =>
+    hiddenPages.map((uuid) => make(uuid) + scope);
   return {
     // Content: blurred and not interactive.
     content: [
+      // The blocks of a tagged page, on the page itself.
       `${TAGGED_PAGE} .ls-page-blocks${scope}`,
-      ...hiddenBlocks.map((uuid) => `.ls-block[blockid="${uuid}"]${scope}`),
+      // Those blocks anywhere else: linked references, embeds, previews.
+      ...forBlocks((uuid) => `.ls-block[blockid="${uuid}"]`),
     ],
-    // Links: blurred but still clickable. Page links (also used for rows in
-    // lists and tables) and block references both carry the target's uuid.
+    // Titles and links: blurred but still clickable.
     links: [
+      // The heading of a tagged page.
       `${TAGGED_PAGE} .ls-page-title${scope}`,
-      ...[...hiddenPages, ...hiddenBlocks].map(
-        (uuid) => `a.page-ref[data-uuid="${uuid}"]${scope}`,
-      ),
-      // A page embed shows the page's title as a block with the page's uuid.
-      ...hiddenPages.map((uuid) => `.block-content[blockid="${uuid}"]${scope}`),
-      // Tag page tables show the title inside the page's row.
-      ...hiddenPages.map((uuid) => `[blockid="${uuid}"] .table-block-title${scope}`),
-      // Table cells (All pages) link by href instead.
-      ...hiddenPages.map((uuid) => `a.page-ref[href="#/page/${uuid}"]${scope}`),
+      // Page links, and block references (which render as links too).
+      ...forPages((uuid) => `a.page-ref[data-uuid="${uuid}"]`),
+      ...forBlocks((uuid) => `a.page-ref[data-uuid="${uuid}"]`),
+      // All pages table: title cells link by href.
+      ...forPages((uuid) => `a.page-ref[href="#/page/${uuid}"]`),
+      // Tag page table: the title sits inside the page's row.
+      ...forPages((uuid) => `[blockid="${uuid}"] .table-block-title`),
+      // Page embed: the page's title renders as a block with its uuid.
+      ...forPages((uuid) => `.block-content[blockid="${uuid}"]`),
+      // Name-only places, marked by markTitles().
       `[${MARK}]`,
     ],
   };
@@ -84,14 +98,29 @@ function renderButton() {
   });
 }
 
-// Recent, Favorites and right sidebar headers only show the page name, so
-// match them by title.
+function isHiddenTitle(text: string | null) {
+  return hiddenTitles.has(text?.trim().toLowerCase() ?? "");
+}
+
 function markTitles() {
-  for (const el of hostDocument.querySelectorAll(
-    "li .page-title, .sidebar-item-header .page-title",
-  )) {
-    const hidden = hiddenTitles.has(el.textContent?.trim().toLowerCase() ?? "");
+  for (const el of hostDocument.querySelectorAll(NAME_ONLY)) {
+    const hidden = isHiddenTitle(el.textContent);
     if (hidden !== el.hasAttribute(MARK)) el.toggleAttribute(MARK, hidden);
+  }
+}
+
+// The window title is the current page's name, which shows in the title bar
+// and window switcher. Replace it while locked, put it back when unlocked.
+let realTitle: string | undefined;
+function updateWindowTitle() {
+  if (unlocked) {
+    if (realTitle && hostDocument.title === NEUTRAL_TITLE) {
+      hostDocument.title = realTitle;
+    }
+    realTitle = undefined;
+  } else if (isHiddenTitle(hostDocument.title)) {
+    realTitle = hostDocument.title;
+    hostDocument.title = NEUTRAL_TITLE;
   }
 }
 
@@ -154,6 +183,7 @@ async function refresh() {
   hiddenTitles = hidden.titles;
   renderStyle();
   markTitles();
+  updateWindowTitle();
   checkMain();
 }
 
@@ -171,6 +201,7 @@ async function main() {
       unlocked = !unlocked;
       renderStyle();
       renderButton();
+      updateWindowTitle();
     },
   });
 
@@ -192,6 +223,12 @@ async function main() {
   new MutationObserver(onDomChange).observe(hostDocument.body, {
     childList: true,
     subtree: true,
+  });
+  // Logseq sets the window title on navigation; replace it right away.
+  new MutationObserver(updateWindowTitle).observe(hostDocument.head, {
+    childList: true,
+    subtree: true,
+    characterData: true,
   });
 
   renderButton();
