@@ -1,0 +1,9 @@
+- This page is NOT tagged, it should always be readable.
+- Block reference to a hidden block (should be blurred):
+	- ((6a1f0c3e-0000-4000-8000-000000000003))
+- Embed of a hidden block (should be blurred):
+	- {{embed ((6a1f0c3e-0000-4000-8000-000000000002))}}
+- Embed of a whole hidden page (should be blurred):
+	- {{embed [[Secret Diary]]}}
+- Link to [[Secret Diary]] and [[Salary Negotiation]] — open them in the sidebar with shift-click.
+- A normal block that should stay readable.

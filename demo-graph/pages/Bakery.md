@@ -1,0 +1,4 @@
+- Opens at 7am, closed on Mondays
+- The chocolate cake needs to be ordered two days ahead
+- Secret recipe #obfuscate
+	- Two cups of sugar, never tell anyone
